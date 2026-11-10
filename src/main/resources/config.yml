@@ -18,7 +18,7 @@ safezone-barrier:
   enabled: true
   knockback-strength: 0.85
   knockback-y: 0.25
-  height: 3
+  height: 8
   duration-ticks: 20
 
 commands:
