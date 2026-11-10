@@ -150,8 +150,8 @@ public final class DonixCombat extends JavaPlugin implements Listener {
         Player attacker = attackingPlayer(event.getDamager());
         if (attacker != null) tagPair(attacker, victim);
         if (event.getDamager() instanceof EnderCrystal crystal && crystal.getLocation() != null) {
-            Player source = crystalAttackers.get(LocationKey.of(crystal.getLocation()));
-            if (source != null) tagExplosionPlayers(source, crystal.getLocation(), 12.0);
+            AttackStamp source = crystalAttackers.get(LocationKey.of(crystal.getLocation()));
+            if (source != null) tagExplosionPlayers(Bukkit.getPlayer(source.attacker), crystal.getLocation(), 12.0);
         }
     }
 
@@ -239,8 +239,8 @@ public final class DonixCombat extends JavaPlugin implements Listener {
     @EventHandler
     public void onQuit(PlayerQuitEvent event) {
         combatUntil.remove(event.getPlayer().getUniqueId());
-        crystalAttackers.values().removeIf(id -> id.equals(event.getPlayer().getUniqueId()));
-        anchorAttackers.values().removeIf(id -> id.equals(event.getPlayer().getUniqueId()));
+        crystalAttackers.values().removeIf(stamp -> stamp.attacker.equals(event.getPlayer().getUniqueId()));
+        anchorAttackers.values().removeIf(stamp -> stamp.attacker.equals(event.getPlayer().getUniqueId()));
     }
 
     @Override
