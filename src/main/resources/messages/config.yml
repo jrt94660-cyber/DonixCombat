@@ -1,0 +1,5 @@
+combat-start: "&cYou are now in combat for &f%time% seconds&c!"
+combat-end: "&aYou are no longer in combat."
+command-blocked: "&cYou cannot use that command while in combat!"
+safezone-entry: "&cYou cannot enter a safezone while in combat!"
+reload: "&aDonixCombat configuration reloaded."
