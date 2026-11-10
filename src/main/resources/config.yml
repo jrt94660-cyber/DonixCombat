@@ -1,0 +1,25 @@
+# DonixCombat configuration
+combat:
+  duration-seconds: 20
+  actionbar: "&cCombat &7» &f%time%s"
+  start-message: "&cYou are now in combat for &f%time% seconds&c!"
+  end-message: "&aYou are no longer in combat."
+  disable-flight: true
+
+# WorldGuard region IDs which players in combat cannot enter.
+# Region IDs are case-insensitive. WorldGuard is an optional dependency.
+safe-regions:
+  - spawn
+  - safezone
+
+commands:
+  # Commands permitted while combat-tagged. Subcommands are also permitted.
+  allowed:
+    - sell
+    - shop
+  blocked-message: "&cYou cannot use that command while in combat!"
+
+messages:
+  safezone-entry: "&cYou cannot enter a safezone while in combat!"
+  reload: "&aDonixCombat configuration reloaded."
+  worldguard-missing: "&eWorldGuard is not installed; safe-region protection is disabled."
