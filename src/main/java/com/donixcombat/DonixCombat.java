@@ -1,9 +1,5 @@
 package com.donixcombat;
 
-import com.sk89q.worldedit.bukkit.BukkitAdapter;
-import com.sk89q.worldguard.WorldGuard;
-import com.sk89q.worldguard.protection.regions.RegionContainer;
-import com.sk89q.worldguard.protection.regions.RegionQuery;
 import org.bukkit.Bukkit;
 import org.bukkit.ChatColor;
 import org.bukkit.Location;
@@ -43,7 +39,8 @@ public final class DonixCombat extends JavaPlugin implements Listener {
     private final Map<LocationKey, AttackStamp> anchorAttackers = new ConcurrentHashMap<>();
     private final Set<String> allowedCommands = new HashSet<>();
     private final Set<String> safeRegions = new HashSet<>();
-    private RegionQuery regionQuery;
+    private Object regionHook;
+    private java.lang.reflect.Method regionCheck;
     private BukkitTask ticker;
     private long combatMillis;
 
@@ -51,12 +48,7 @@ public final class DonixCombat extends JavaPlugin implements Listener {
     public void onEnable() {
         saveDefaultConfig();
         loadSettings();
-        if (Bukkit.getPluginManager().getPlugin("WorldGuard") != null) {
-            RegionContainer container = WorldGuard.getInstance().getPlatform().getRegionContainer();
-            regionQuery = container.createQuery();
-        } else {
-            getLogger().warning("WorldGuard is not installed; safe-region protection is disabled.");
-        }
+        initializeWorldGuardHook();
         Bukkit.getPluginManager().registerEvents(this, this);
         ticker = Bukkit.getScheduler().runTaskTimer(this, this::tickCombat, 0L, 20L);
         getLogger().info("DonixCombat v" + getDescription().getVersion() + " enabled.");
@@ -214,7 +206,7 @@ public final class DonixCombat extends JavaPlugin implements Listener {
 
     @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = true)
     public void onMove(PlayerMoveEvent event) {
-        if (event.getTo() == null || !isInCombat(event.getPlayer()) || regionQuery == null) return;
+        if (event.getTo() == null || !isInCombat(event.getPlayer()) || regionHook == null || regionCheck == null) return;
         Location from = event.getFrom();
         Location to = event.getTo();
         if (from.getWorld() == to.getWorld() && from.getBlockX() == to.getBlockX()
@@ -267,17 +259,33 @@ public final class DonixCombat extends JavaPlugin implements Listener {
         }, durationTicks);
     }
 
-    private boolean isSafeRegion(Location location) {
-        if (regionQuery == null || location.getWorld() == null) return false;
-        try {
-            var applicable = regionQuery.getApplicableRegions(BukkitAdapter.adapt(location));
-            for (var region : applicable.getRegions()) {
-                if (safeRegions.contains(region.getId().toLowerCase(Locale.ROOT))) return true;
-            }
-        } catch (Exception exception) {
-            getLogger().fine("Could not query WorldGuard region at " + location + ": " + exception.getMessage());
+    private void initializeWorldGuardHook() {
+        if (Bukkit.getPluginManager().getPlugin("WorldGuard") == null
+                || !Bukkit.getPluginManager().isPluginEnabled("WorldGuard")) {
+            getLogger().info("WorldGuard not found; safe-region protection is inactive.");
+            return;
         }
-        return false;
+        try {
+            Class<?> hookClass = Class.forName("com.donixcombat.WorldGuardHook", true, getClassLoader());
+            regionHook = hookClass.getConstructor().newInstance();
+            regionCheck = hookClass.getMethod("isSafeRegion", Location.class, Set.class);
+            getLogger().info("WorldGuard integration enabled.");
+        } catch (ReflectiveOperationException | LinkageError | RuntimeException exception) {
+            regionHook = null;
+            regionCheck = null;
+            getLogger().warning("WorldGuard integration could not start; safe-region protection is disabled: "
+                    + exception.getClass().getSimpleName() + ": " + exception.getMessage());
+        }
+    }
+
+    private boolean isSafeRegion(Location location) {
+        if (regionHook == null || regionCheck == null || location.getWorld() == null) return false;
+        try {
+            return Boolean.TRUE.equals(regionCheck.invoke(regionHook, location, safeRegions));
+        } catch (ReflectiveOperationException | RuntimeException exception) {
+            getLogger().fine("WorldGuard region check failed safely: " + exception.getMessage());
+            return false;
+        }
     }
 
     @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = true)
