@@ -12,6 +12,15 @@ safe-regions:
   - spawn
   - safezone
 
+# Knock combat-tagged players away from safe-region entrances.
+# Red stained glass is a temporary client-side visual barrier; it does not edit the world.
+safezone-barrier:
+  enabled: true
+  knockback-strength: 0.85
+  knockback-y: 0.25
+  height: 3
+  duration-ticks: 20
+
 commands:
   # Commands permitted while combat-tagged. Subcommands are also permitted.
   allowed:
