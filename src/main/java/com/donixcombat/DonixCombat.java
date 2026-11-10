@@ -37,8 +37,8 @@ import java.util.concurrent.ConcurrentHashMap;
 
 public final class DonixCombat extends JavaPlugin implements Listener {
     private final Map<UUID, Long> combatUntil = new ConcurrentHashMap<>();
-    private final Map<LocationKey, UUID> crystalAttackers = new ConcurrentHashMap<>();
-    private final Map<LocationKey, UUID> anchorAttackers = new ConcurrentHashMap<>();
+    private final Map<LocationKey, AttackStamp> crystalAttackers = new ConcurrentHashMap<>();
+    private final Map<LocationKey, AttackStamp> anchorAttackers = new ConcurrentHashMap<>();
     private final Set<String> allowedCommands = new HashSet<>();
     private final Set<String> safeRegions = new HashSet<>();
     private RegionQuery regionQuery;
@@ -131,8 +131,8 @@ public final class DonixCombat extends JavaPlugin implements Listener {
             player.sendActionBar(color(bar.replace("%time%", String.valueOf(seconds))));
         }
         long expiry = now - 5000L;
-        crystalAttackers.keySet().removeIf(key -> key.time < expiry);
-        anchorAttackers.keySet().removeIf(key -> key.time < expiry);
+        crystalAttackers.entrySet().removeIf(entry -> entry.getValue().timestamp < expiry);
+        anchorAttackers.entrySet().removeIf(entry -> entry.getValue().timestamp < expiry);
     }
 
     private Player attackingPlayer(Entity damager) {
@@ -159,14 +159,14 @@ public final class DonixCombat extends JavaPlugin implements Listener {
     public void onCrystalDamage(EntityDamageByEntityEvent event) {
         if (!(event.getEntity() instanceof EnderCrystal crystal)) return;
         Player attacker = attackingPlayer(event.getDamager());
-        if (attacker != null) crystalAttackers.put(LocationKey.of(crystal.getLocation()), attacker.getUniqueId());
+        if (attacker != null) crystalAttackers.put(LocationKey.of(crystal.getLocation()), new AttackStamp(attacker.getUniqueId(), System.currentTimeMillis()));
     }
 
     @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
     public void onCrystalExplode(EntityExplodeEvent event) {
         if (!(event.getEntity() instanceof EnderCrystal crystal)) return;
-        UUID attackerId = crystalAttackers.remove(LocationKey.of(crystal.getLocation()));
-        Player attacker = attackerId == null ? null : Bukkit.getPlayer(attackerId);
+        AttackStamp stamp = crystalAttackers.remove(LocationKey.of(crystal.getLocation()));
+        Player attacker = stamp == null ? null : Bukkit.getPlayer(stamp.attacker);
         if (attacker != null) tagExplosionPlayers(attacker, crystal.getLocation(), 12.0);
     }
 
@@ -176,13 +176,13 @@ public final class DonixCombat extends JavaPlugin implements Listener {
         Block block = event.getClickedBlock();
         if (block == null || block.getType().name().equals("RESPAWN_ANCHOR") == false) return;
         Location location = block.getLocation();
-        anchorAttackers.put(LocationKey.of(location), event.getPlayer().getUniqueId());
+        anchorAttackers.put(LocationKey.of(location), new AttackStamp(event.getPlayer().getUniqueId(), System.currentTimeMillis()));
     }
 
     @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
     public void onAnchorExplode(BlockExplodeEvent event) {
-        UUID attackerId = anchorAttackers.remove(LocationKey.of(event.getBlock().getLocation()));
-        Player attacker = attackerId == null ? null : Bukkit.getPlayer(attackerId);
+        AttackStamp stamp = anchorAttackers.remove(LocationKey.of(event.getBlock().getLocation()));
+        Player attacker = stamp == null ? null : Bukkit.getPlayer(stamp.attacker);
         if (attacker != null) tagExplosionPlayers(attacker, event.getBlock().getLocation(), 12.0);
     }
 
@@ -263,9 +263,5 @@ public final class DonixCombat extends JavaPlugin implements Listener {
         return ChatColor.translateAlternateColorCodes('&', input == null ? "" : input);
     }
 
-    private record LocationKey(UUID world, int x, int y, int z, long time) {
-        static LocationKey of(Location location) {
-            return new LocationKey(location.getWorld().getUID(), location.getBlockX(), location.getBlockY(), location.getBlockZ(), System.currentTimeMillis());
-        }
-    }
+    private record LocationKey(UUID world, int x, int y, int z) {\n        static LocationKey of(Location location) {\n            return new LocationKey(location.getWorld().getUID(), location.getBlockX(), location.getBlockY(), location.getBlockZ());\n        }\n    }\n\n    private record AttackStamp(UUID attacker, long timestamp) {}
 }
