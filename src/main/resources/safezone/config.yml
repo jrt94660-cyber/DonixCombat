@@ -1,0 +1,13 @@
+# WorldGuard region IDs that combat-tagged players cannot enter.
+# Region IDs are case-insensitive.
+regions:
+  - spawn
+  - safezone
+
+# Temporary client-side red glass and knockback at the attempted entrance.
+barrier:
+  enabled: true
+  knockback-strength: 0.85
+  knockback-y: 0.25
+  height: 8
+  duration-ticks: 20
