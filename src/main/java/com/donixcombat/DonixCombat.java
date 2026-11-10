@@ -263,5 +263,11 @@ public final class DonixCombat extends JavaPlugin implements Listener {
         return ChatColor.translateAlternateColorCodes('&', input == null ? "" : input);
     }
 
-    private record LocationKey(UUID world, int x, int y, int z) {\n        static LocationKey of(Location location) {\n            return new LocationKey(location.getWorld().getUID(), location.getBlockX(), location.getBlockY(), location.getBlockZ());\n        }\n    }\n\n    private record AttackStamp(UUID attacker, long timestamp) {}
+    private record LocationKey(UUID world, int x, int y, int z) {
+        static LocationKey of(Location location) {
+            return new LocationKey(location.getWorld().getUID(), location.getBlockX(), location.getBlockY(), location.getBlockZ());
+        }
+    }
+
+    private record AttackStamp(UUID attacker, long timestamp) {}
 }
