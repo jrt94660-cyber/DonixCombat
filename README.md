@@ -24,5 +24,5 @@ Edit `plugins/DonixCombat/config.yml`. Safe-region entries must match WorldGuard
 
 ## Build
 
-Run `mvn clean package`. The output JAR is `target/DonixCombat-1.0.0.jar`.
-GitHub Actions builds the JAR on pushes and pull requests and uploads it as a workflow artifact.
+Run `mvn clean package`. The output JAR is `target/combat-1.0.0.jar`.
+GitHub Actions builds the JAR on pushes and pull requests and uploads it as a workflow artifact named `combat-1.0.0`.
