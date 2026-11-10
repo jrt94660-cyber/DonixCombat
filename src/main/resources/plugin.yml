@@ -1,0 +1,17 @@
+name: DonixCombat
+version: 1.0.0
+main: com.donixcombat.DonixCombat
+api-version: '1.21'
+softdepend: [WorldGuard]
+authors: [jrt94660-cyber]
+description: DonutSMP-style combat tagging, explosion attribution, and safezone protection.
+commands:
+  donixcombat:
+    description: DonixCombat administration
+    usage: /donixcombat reload
+    aliases: [dc]
+    permission: donixcombat.admin
+permissions:
+  donixcombat.admin:
+    description: Allows reloading DonixCombat
+    default: op
