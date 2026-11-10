@@ -29,7 +29,9 @@ import org.bukkit.inventory.EquipmentSlot;
 import org.bukkit.projectiles.ProjectileSource;
 import org.bukkit.plugin.java.JavaPlugin;
 import org.bukkit.scheduler.BukkitTask;
+import org.bukkit.configuration.file.YamlConfiguration;
 
+import java.io.File;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 
@@ -42,16 +44,17 @@ public final class DonixCombat extends JavaPlugin implements Listener {
     private Object regionHook;
     private java.lang.reflect.Method regionCheck;
     private BukkitTask ticker;
+    private YamlConfiguration mainSettings, combatSettings, safezoneSettings, commandsSettings, messagesSettings;
+    private boolean featureEnabled;
     private long combatMillis;
 
     @Override
     public void onEnable() {
-        saveDefaultConfig();
         loadSettings();
         initializeWorldGuardHook();
         Bukkit.getPluginManager().registerEvents(this, this);
         ticker = Bukkit.getScheduler().runTaskTimer(this, this::tickCombat, 0L, 20L);
-        getLogger().info("DonixCombat v" + getDescription().getVersion() + " enabled.");
+        getLogger().info("DonixCombat v" + getDescription().getVersion() + (featureEnabled ? " enabled." : " loaded but disabled in config.yml."));
     }
 
     @Override
@@ -63,19 +66,45 @@ public final class DonixCombat extends JavaPlugin implements Listener {
     }
 
     private void loadSettings() {
-        reloadConfig();
-        combatMillis = Math.max(1, getConfig().getInt("combat.duration-seconds", 20)) * 1000L;
+        mainSettings = loadYaml("config.yml");
+        combatSettings = loadYaml("combat/config.yml");
+        safezoneSettings = loadYaml("safezone/config.yml");
+        commandsSettings = loadYaml("commands/config.yml");
+        messagesSettings = loadYaml("messages/config.yml");
+        featureEnabled = mainSettings.getBoolean("enabled", true);
+        combatMillis = Math.max(1, combatSettings.getInt("duration-seconds", 20)) * 1000L;
         allowedCommands.clear();
-        for (String command : getConfig().getStringList("commands.allowed")) {
+        for (String command : commandsSettings.getStringList("allowed")) {
             allowedCommands.add(command.toLowerCase(Locale.ROOT));
         }
         safeRegions.clear();
-        for (String region : getConfig().getStringList("safe-regions")) {
+        for (String region : safezoneSettings.getStringList("regions")) {
             safeRegions.add(region.toLowerCase(Locale.ROOT));
+        }
+        if (!featureEnabled) {
+            combatUntil.clear();
+            for (Player player : Bukkit.getOnlinePlayers()) player.sendActionBar("");
         }
     }
 
+    private YamlConfiguration loadYaml(String relativePath) {
+        File file = new File(getDataFolder(), relativePath);
+        File parent = file.getParentFile();
+        if (parent != null && !parent.exists() && !parent.mkdirs()) {
+            getLogger().warning("Could not create config folder: " + parent.getPath());
+        }
+        if (!file.exists()) {
+            try {
+                saveResource(relativePath, false);
+            } catch (IllegalArgumentException exception) {
+                getLogger().warning("Missing default config resource: " + relativePath);
+            }
+        }
+        return YamlConfiguration.loadConfiguration(file);
+    }
+
     public boolean isInCombat(Player player) {
+        if (!featureEnabled) return false;
         Long until = combatUntil.get(player.getUniqueId());
         if (until == null) return false;
         if (until <= System.currentTimeMillis()) {
@@ -86,18 +115,18 @@ public final class DonixCombat extends JavaPlugin implements Listener {
     }
 
     private void tag(Player player) {
-        if (!player.isOnline()) return;
+        if (!featureEnabled || !player.isOnline()) return;
         long now = System.currentTimeMillis();
         boolean alreadyTagged = combatUntil.containsKey(player.getUniqueId())
                 && combatUntil.get(player.getUniqueId()) > now;
         combatUntil.put(player.getUniqueId(), now + combatMillis);
 
-        if (getConfig().getBoolean("combat.disable-flight", true)) {
+        if (combatSettings.getBoolean("disable-flight", true)) {
             if (player.isFlying()) player.setFlying(false);
             if (player.getAllowFlight()) player.setAllowFlight(false);
         }
         if (!alreadyTagged) {
-            String message = getConfig().getString("combat.start-message", "&cYou are now in combat for &f%time% seconds&c!");
+            String message = messagesSettings.getString("combat-start", "&cYou are now in combat for &f%time% seconds&c!");
             player.sendMessage(color(message.replace("%time%", String.valueOf(combatMillis / 1000L))));
         }
     }
@@ -109,6 +138,7 @@ public final class DonixCombat extends JavaPlugin implements Listener {
     }
 
     private void tickCombat() {
+        if (!featureEnabled) return;
         long now = System.currentTimeMillis();
         for (Player player : Bukkit.getOnlinePlayers()) {
             Long until = combatUntil.get(player.getUniqueId());
@@ -116,12 +146,12 @@ public final class DonixCombat extends JavaPlugin implements Listener {
             long remaining = until - now;
             if (remaining <= 0) {
                 combatUntil.remove(player.getUniqueId());
-                player.sendMessage(color(getConfig().getString("combat.end-message", "&aYou are no longer in combat.")));
+                player.sendMessage(color(messagesSettings.getString("combat-end", "&aYou are no longer in combat.")));
                 player.sendActionBar("");
                 continue;
             }
             long seconds = (remaining + 999L) / 1000L;
-            String bar = getConfig().getString("combat.actionbar", "&cCombat &7» &f%time%s");
+            String bar = combatSettings.getString("actionbar", "&cCombat &7» &f%time%s");
             player.sendActionBar(color(bar.replace("%time%", String.valueOf(seconds))));
         }
         long expiry = now - 5000L;
@@ -140,6 +170,7 @@ public final class DonixCombat extends JavaPlugin implements Listener {
 
     @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
     public void onPlayerDamage(EntityDamageByEntityEvent event) {
+        if (!featureEnabled) return;
         if (!(event.getEntity() instanceof Player victim)) return;
         Player attacker = attackingPlayer(event.getDamager());
         if (attacker != null) tagPair(attacker, victim);
@@ -151,6 +182,7 @@ public final class DonixCombat extends JavaPlugin implements Listener {
 
     @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
     public void onCrystalDamage(EntityDamageByEntityEvent event) {
+        if (!featureEnabled) return;
         if (!(event.getEntity() instanceof EnderCrystal crystal)) return;
         Player attacker = attackingPlayer(event.getDamager());
         if (attacker != null) crystalAttackers.put(LocationKey.of(crystal.getLocation()), new AttackStamp(attacker.getUniqueId(), System.currentTimeMillis()));
@@ -158,6 +190,7 @@ public final class DonixCombat extends JavaPlugin implements Listener {
 
     @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
     public void onCrystalExplode(EntityExplodeEvent event) {
+        if (!featureEnabled) return;
         if (!(event.getEntity() instanceof EnderCrystal crystal)) return;
         AttackStamp stamp = crystalAttackers.remove(LocationKey.of(crystal.getLocation()));
         Player attacker = stamp == null ? null : Bukkit.getPlayer(stamp.attacker);
@@ -166,6 +199,7 @@ public final class DonixCombat extends JavaPlugin implements Listener {
 
     @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
     public void onAnchorInteract(PlayerInteractEvent event) {
+        if (!featureEnabled) return;
         if (event.getHand() != EquipmentSlot.HAND || event.getAction() != Action.RIGHT_CLICK_BLOCK) return;
         Block block = event.getClickedBlock();
         if (block == null || block.getType().name().equals("RESPAWN_ANCHOR") == false) return;
@@ -175,6 +209,7 @@ public final class DonixCombat extends JavaPlugin implements Listener {
 
     @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
     public void onAnchorExplode(BlockExplodeEvent event) {
+        if (!featureEnabled) return;
         AttackStamp stamp = anchorAttackers.remove(LocationKey.of(event.getBlock().getLocation()));
         Player attacker = stamp == null ? null : Bukkit.getPlayer(stamp.attacker);
         if (attacker != null) tagExplosionPlayers(attacker, event.getBlock().getLocation(), 12.0);
@@ -193,6 +228,7 @@ public final class DonixCombat extends JavaPlugin implements Listener {
 
     @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = true)
     public void onCommand(PlayerCommandPreprocessEvent event) {
+        if (!featureEnabled) return;
         Player player = event.getPlayer();
         if (!isInCombat(player)) return;
         String message = event.getMessage().substring(1).trim();
@@ -201,11 +237,12 @@ public final class DonixCombat extends JavaPlugin implements Listener {
         if (root.contains(":")) root = root.substring(root.lastIndexOf(':') + 1);
         if (allowedCommands.contains(root)) return;
         event.setCancelled(true);
-        player.sendMessage(color(getConfig().getString("commands.blocked-message", "&cYou cannot use that command while in combat!")));
+        player.sendMessage(color(messagesSettings.getString("command-blocked", "&cYou cannot use that command while in combat!")));
     }
 
     @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = true)
     public void onMove(PlayerMoveEvent event) {
+        if (!featureEnabled) return;
         if (event.getTo() == null || !isInCombat(event.getPlayer()) || regionHook == null || regionCheck == null) return;
         Location from = event.getFrom();
         Location to = event.getTo();
@@ -215,10 +252,10 @@ public final class DonixCombat extends JavaPlugin implements Listener {
             Player player = event.getPlayer();
             event.setTo(from);
             knockPlayerAway(player, from, to);
-            if (getConfig().getBoolean("safezone-barrier.enabled", true)) {
+            if (safezoneSettings.getBoolean("barrier.enabled", true)) {
                 showRedGlassBarrier(player, to);
             }
-            player.sendActionBar(color(getConfig().getString("messages.safezone-entry", "&cYou cannot enter a safezone while in combat!")));
+            player.sendActionBar(color(messagesSettings.getString("safezone-entry", "&cYou cannot enter a safezone while in combat!")));
         }
     }
 
@@ -230,8 +267,8 @@ public final class DonixCombat extends JavaPlugin implements Listener {
             away.setY(0);
         }
         if (away.lengthSquared() > 0.0001) away.normalize();
-        double strength = Math.max(0.0, getConfig().getDouble("safezone-barrier.knockback-strength", 0.85));
-        double vertical = getConfig().getDouble("safezone-barrier.knockback-y", 0.25);
+        double strength = Math.max(0.0, safezoneSettings.getDouble("barrier.knockback-strength", 0.85));
+        double vertical = safezoneSettings.getDouble("barrier.knockback-y", 0.25);
         away.multiply(strength);
         away.setY(vertical);
         player.setVelocity(away);
@@ -240,8 +277,8 @@ public final class DonixCombat extends JavaPlugin implements Listener {
     // The red glass is sent only to the combat-tagged player; no real world blocks are changed.
     private void showRedGlassBarrier(Player player, Location attemptedTo) {
         if (attemptedTo.getWorld() == null) return;
-        int height = Math.max(1, Math.min(8, getConfig().getInt("safezone-barrier.height", 8)));
-        int durationTicks = Math.max(1, getConfig().getInt("safezone-barrier.duration-ticks", 20));
+        int height = Math.max(1, Math.min(8, safezoneSettings.getInt("barrier.height", 8)));
+        int durationTicks = Math.max(1, safezoneSettings.getInt("barrier.duration-ticks", 20));
         int x = attemptedTo.getBlockX();
         int z = attemptedTo.getBlockZ();
         int baseY = attemptedTo.getBlockY();
@@ -290,6 +327,7 @@ public final class DonixCombat extends JavaPlugin implements Listener {
 
     @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = true)
     public void onFlightToggle(PlayerToggleFlightEvent event) {
+        if (!featureEnabled) return;
         if (!event.isFlying() || !isInCombat(event.getPlayer())) return;
         event.setCancelled(true);
         if (event.getPlayer().isFlying()) event.getPlayer().setFlying(false);
@@ -311,7 +349,7 @@ public final class DonixCombat extends JavaPlugin implements Listener {
         }
         if (args.length == 1 && args[0].equalsIgnoreCase("reload")) {
             loadSettings();
-            sender.sendMessage(color(getConfig().getString("messages.reload", "&aDonixCombat configuration reloaded.")));
+            sender.sendMessage(color(messagesSettings.getString("reload", "&aDonixCombat configuration reloaded.")));
             return true;
         }
         sender.sendMessage(color("&cUsage: /donixcombat reload"));
