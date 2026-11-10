@@ -7,6 +7,8 @@ import com.sk89q.worldguard.protection.regions.RegionQuery;
 import org.bukkit.Bukkit;
 import org.bukkit.ChatColor;
 import org.bukkit.Location;
+import org.bukkit.Material;
+import org.bukkit.util.Vector;
 import org.bukkit.World;
 import org.bukkit.block.Block;
 import org.bukkit.command.Command;
@@ -218,9 +220,51 @@ public final class DonixCombat extends JavaPlugin implements Listener {
         if (from.getWorld() == to.getWorld() && from.getBlockX() == to.getBlockX()
                 && from.getBlockY() == to.getBlockY() && from.getBlockZ() == to.getBlockZ()) return;
         if (isSafeRegion(to)) {
+            Player player = event.getPlayer();
             event.setTo(from);
-            event.getPlayer().sendActionBar(color(getConfig().getString("messages.safezone-entry", "&cYou cannot enter a safezone while in combat!")));
+            knockPlayerAway(player, from, to);
+            if (getConfig().getBoolean("safezone-barrier.enabled", true)) {
+                showRedGlassBarrier(player, to);
+            }
+            player.sendActionBar(color(getConfig().getString("messages.safezone-entry", "&cYou cannot enter a safezone while in combat!")));
         }
+    }
+
+    private void knockPlayerAway(Player player, Location from, Location attemptedTo) {
+        Vector away = from.toVector().subtract(attemptedTo.toVector());
+        away.setY(0);
+        if (away.lengthSquared() < 0.0001) {
+            away = player.getLocation().getDirection().multiply(-1);
+            away.setY(0);
+        }
+        if (away.lengthSquared() > 0.0001) away.normalize();
+        double strength = Math.max(0.0, getConfig().getDouble("safezone-barrier.knockback-strength", 0.85));
+        double vertical = getConfig().getDouble("safezone-barrier.knockback-y", 0.25);
+        away.multiply(strength);
+        away.setY(vertical);
+        player.setVelocity(away);
+    }
+
+    // The red glass is sent only to the combat-tagged player; no real world blocks are changed.
+    private void showRedGlassBarrier(Player player, Location attemptedTo) {
+        if (attemptedTo.getWorld() == null) return;
+        int height = Math.max(1, Math.min(6, getConfig().getInt("safezone-barrier.height", 3)));
+        int durationTicks = Math.max(1, getConfig().getInt("safezone-barrier.duration-ticks", 20));
+        int x = attemptedTo.getBlockX();
+        int z = attemptedTo.getBlockZ();
+        int baseY = attemptedTo.getBlockY();
+        Material glass = Material.RED_STAINED_GLASS;
+        for (int offset = 0; offset < height; offset++) {
+            Location blockLocation = new Location(attemptedTo.getWorld(), x, baseY + offset, z);
+            player.sendBlockChange(blockLocation, glass.createBlockData());
+        }
+        Bukkit.getScheduler().runTaskLater(this, () -> {
+            if (!player.isOnline() || player.getWorld() != attemptedTo.getWorld()) return;
+            for (int offset = 0; offset < height; offset++) {
+                Location blockLocation = new Location(attemptedTo.getWorld(), x, baseY + offset, z);
+                player.sendBlockChange(blockLocation, blockLocation.getBlock().getBlockData());
+            }
+        }, durationTicks);
     }
 
     private boolean isSafeRegion(Location location) {
