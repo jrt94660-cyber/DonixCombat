@@ -8,6 +8,8 @@ A DonutSMP-style combat-tag plugin for Paper.
 - Tracks player-caused End Crystal and Respawn Anchor explosions and tags nearby players.
 - Shows a configurable countdown on the action bar (20 seconds by default).
 - Prevents combat-tagged players from entering configured WorldGuard regions.
+- Knocks combat-tagged players away from safe-region entrances.
+- Displays a temporary red stained-glass barrier to combat-tagged players at the blocked entrance. These are client-side visuals and do not change world blocks.
 - Disables flight when combat starts and prevents flight from being toggled back on during combat.
 - Blocks commands during combat except the configured allowlist (defaults: `/sell` and `/shop`).
 - Supports `/donixcombat reload`.
@@ -20,9 +22,9 @@ A DonutSMP-style combat-tag plugin for Paper.
 
 ## Configuration
 
-Edit `plugins/DonixCombat/config.yml`. Safe-region entries must match WorldGuard region IDs.
+Edit `plugins/DonixCombat/config.yml`. Safe-region entries must match WorldGuard region IDs. Knockback and the temporary red-glass barrier can be adjusted under `safezone-barrier`.
 
 ## Build
 
-Run `mvn clean package`. The output JAR is `target/combat-1.0.0.jar`.
-GitHub Actions builds the JAR on pushes and pull requests and uploads it as a workflow artifact named `combat-1.0.0`.
+Run `mvn clean package`. The output JAR is `target/combat-1.0.1.jar`.
+GitHub Actions builds the JAR on pushes and pull requests and uploads it as a workflow artifact named `combat-1.0.1`.
