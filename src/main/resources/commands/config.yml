@@ -1,0 +1,4 @@
+# Commands allowed while combat-tagged. Subcommands are also allowed.
+allowed:
+  - sell
+  - shop
