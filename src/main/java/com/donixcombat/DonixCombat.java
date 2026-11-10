@@ -236,6 +236,13 @@ public final class DonixCombat extends JavaPlugin implements Listener {
         return false;
     }
 
+    @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = true)
+    public void onFlightToggle(PlayerToggleFlightEvent event) {
+        if (!event.isFlying() || !isInCombat(event.getPlayer())) return;
+        event.setCancelled(true);
+        if (event.getPlayer().isFlying()) event.getPlayer().setFlying(false);
+    }
+
     @EventHandler
     public void onQuit(PlayerQuitEvent event) {
         combatUntil.remove(event.getPlayer().getUniqueId());
