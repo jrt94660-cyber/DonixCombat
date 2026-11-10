@@ -248,7 +248,7 @@ public final class DonixCombat extends JavaPlugin implements Listener {
     // The red glass is sent only to the combat-tagged player; no real world blocks are changed.
     private void showRedGlassBarrier(Player player, Location attemptedTo) {
         if (attemptedTo.getWorld() == null) return;
-        int height = Math.max(1, Math.min(6, getConfig().getInt("safezone-barrier.height", 3)));
+        int height = Math.max(1, Math.min(8, getConfig().getInt("safezone-barrier.height", 8)));
         int durationTicks = Math.max(1, getConfig().getInt("safezone-barrier.duration-ticks", 20));
         int x = attemptedTo.getBlockX();
         int z = attemptedTo.getBlockZ();
