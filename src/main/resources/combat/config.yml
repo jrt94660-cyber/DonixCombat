@@ -2,3 +2,4 @@
 duration-seconds: 20
 actionbar: "&cCombat &7» &f%time%s"
 disable-flight: true
+kill-on-logout: true
