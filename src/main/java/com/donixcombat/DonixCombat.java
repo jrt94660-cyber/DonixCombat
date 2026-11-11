@@ -18,6 +18,7 @@ import org.bukkit.event.EventPriority;
 import org.bukkit.event.Listener;
 import org.bukkit.event.block.BlockExplodeEvent;
 import org.bukkit.event.entity.EntityDamageByEntityEvent;
+import org.bukkit.event.entity.PlayerDeathEvent;
 import org.bukkit.event.entity.EntityExplodeEvent;
 import org.bukkit.event.player.PlayerCommandPreprocessEvent;
 import org.bukkit.event.player.PlayerInteractEvent;
@@ -341,6 +342,14 @@ public final class DonixCombat extends JavaPlugin implements Listener {
         if (!event.isFlying() || !isInCombat(event.getPlayer())) return;
         event.setCancelled(true);
         if (event.getPlayer().isFlying()) event.getPlayer().setFlying(false);
+    }
+
+    @EventHandler(priority = EventPriority.MONITOR)
+    public void onDeath(PlayerDeathEvent event) {
+        Player player = event.getEntity();
+        // Death ends combat immediately; do not carry the tag through respawn.
+        combatUntil.remove(player.getUniqueId());
+        player.sendActionBar("");
     }
 
     @EventHandler(priority = EventPriority.MONITOR)
