@@ -176,7 +176,12 @@ public final class DonixCombat extends JavaPlugin implements Listener {
         if (attacker != null) tagPair(attacker, victim);
         if (event.getDamager() instanceof EnderCrystal crystal && crystal.getLocation() != null) {
             AttackStamp source = crystalAttackers.get(LocationKey.of(crystal.getLocation()));
-            if (source != null) tagExplosionPlayers(Bukkit.getPlayer(source.attacker), crystal.getLocation(), 12.0);
+            Player crystalAttacker = source == null ? null : Bukkit.getPlayer(source.attacker);
+            // Only tag the crystal owner when the explosion actually damages another player.
+            // Self-damage from your own crystal must never create a combat tag.
+            if (crystalAttacker != null && !crystalAttacker.equals(victim)) {
+                tagPair(crystalAttacker, victim);
+            }
         }
     }
 
@@ -192,9 +197,10 @@ public final class DonixCombat extends JavaPlugin implements Listener {
     public void onCrystalExplode(EntityExplodeEvent event) {
         if (!featureEnabled) return;
         if (!(event.getEntity() instanceof EnderCrystal crystal)) return;
-        AttackStamp stamp = crystalAttackers.remove(LocationKey.of(crystal.getLocation()));
-        Player attacker = stamp == null ? null : Bukkit.getPlayer(stamp.attacker);
-        if (attacker != null) tagExplosionPlayers(attacker, crystal.getLocation(), 12.0);
+        LocationKey key = LocationKey.of(crystal.getLocation());
+        // Entity damage events for the explosion are processed around this event. Keep
+        // the owner stamp briefly so those events can pair the owner with actual victims.
+        Bukkit.getScheduler().runTaskLater(this, () -> crystalAttackers.remove(key), 2L);
     }
 
     @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
@@ -216,14 +222,18 @@ public final class DonixCombat extends JavaPlugin implements Listener {
     }
 
     private void tagExplosionPlayers(Player attacker, Location center, double radius) {
-        if (attacker == null || !attacker.isOnline()) return;
-        tag(attacker);
+        if (attacker == null || !attacker.isOnline() || center.getWorld() == null) return;
         double squared = radius * radius;
+        boolean hitAnotherPlayer = false;
         for (Entity entity : center.getWorld().getNearbyEntities(center, radius, radius, radius)) {
-            if (entity instanceof Player victim && victim.getLocation().distanceSquared(center) <= squared) {
+            if (entity instanceof Player victim && !victim.equals(attacker)
+                    && victim.getLocation().distanceSquared(center) <= squared) {
                 tag(victim);
+                hitAnotherPlayer = true;
             }
         }
+        // A respawn anchor only starts combat when it affects someone other than its owner.
+        if (hitAnotherPlayer) tag(attacker);
     }
 
     @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = true)
@@ -333,11 +343,17 @@ public final class DonixCombat extends JavaPlugin implements Listener {
         if (event.getPlayer().isFlying()) event.getPlayer().setFlying(false);
     }
 
-    @EventHandler
+    @EventHandler(priority = EventPriority.MONITOR)
     public void onQuit(PlayerQuitEvent event) {
-        combatUntil.remove(event.getPlayer().getUniqueId());
-        crystalAttackers.values().removeIf(stamp -> stamp.attacker.equals(event.getPlayer().getUniqueId()));
-        anchorAttackers.values().removeIf(stamp -> stamp.attacker.equals(event.getPlayer().getUniqueId()));
+        Player player = event.getPlayer();
+        // Check the timer before clearing it: combat logouts are treated as deaths.
+        if (featureEnabled && combatSettings.getBoolean("kill-on-logout", true)
+                && isInCombat(player) && player.getHealth() > 0.0) {
+            player.setHealth(0.0);
+        }
+        combatUntil.remove(player.getUniqueId());
+        crystalAttackers.values().removeIf(stamp -> stamp.attacker.equals(player.getUniqueId()));
+        anchorAttackers.values().removeIf(stamp -> stamp.attacker.equals(player.getUniqueId()));
     }
 
     @Override
