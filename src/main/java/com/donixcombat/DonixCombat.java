@@ -19,6 +19,7 @@ import org.bukkit.event.Listener;
 import org.bukkit.event.block.BlockExplodeEvent;
 import org.bukkit.event.entity.EntityDamageByEntityEvent;
 import org.bukkit.event.entity.PlayerDeathEvent;
+import org.bukkit.event.player.PlayerRespawnEvent;
 import org.bukkit.event.entity.EntityExplodeEvent;
 import org.bukkit.event.player.PlayerCommandPreprocessEvent;
 import org.bukkit.event.player.PlayerInteractEvent;
@@ -116,7 +117,7 @@ public final class DonixCombat extends JavaPlugin implements Listener {
     }
 
     private void tag(Player player) {
-        if (!featureEnabled || !player.isOnline()) return;
+        if (!featureEnabled || !player.isOnline() || player.isDead()) return;
         long now = System.currentTimeMillis();
         boolean alreadyTagged = combatUntil.containsKey(player.getUniqueId())
                 && combatUntil.get(player.getUniqueId()) > now;
@@ -347,9 +348,23 @@ public final class DonixCombat extends JavaPlugin implements Listener {
     @EventHandler(priority = EventPriority.MONITOR)
     public void onDeath(PlayerDeathEvent event) {
         Player player = event.getEntity();
-        // Death ends combat immediately; do not carry the tag through respawn.
+        // Clear now and again on the next tick to cover damage-monitor ordering.
         combatUntil.remove(player.getUniqueId());
         player.sendActionBar("");
+        Bukkit.getScheduler().runTask(this, () -> {
+            combatUntil.remove(player.getUniqueId());
+            if (player.isOnline()) player.sendActionBar("");
+        });
+    }
+
+    @EventHandler(priority = EventPriority.MONITOR)
+    public void onRespawn(PlayerRespawnEvent event) {
+        Player player = event.getPlayer();
+        combatUntil.remove(player.getUniqueId());
+        Bukkit.getScheduler().runTask(this, () -> {
+            combatUntil.remove(player.getUniqueId());
+            if (player.isOnline()) player.sendActionBar("");
+        });
     }
 
     @EventHandler(priority = EventPriority.MONITOR)
