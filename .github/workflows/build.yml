@@ -16,10 +16,16 @@ jobs:
           distribution: temurin
           java-version: '21'
           cache: maven
+      - name: Get plugin version
+        id: version
+        run: |
+          VERSION=$(mvn -q help:evaluate -Dexpression=project.version -DforceStdout)
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
       - name: Build plugin
         run: mvn -B clean package
       - name: Upload plugin JAR
         uses: actions/upload-artifact@v4
         with:
-          name: combat-1.0.7
-          path: target/combat-1.0.7.jar
+          name: combat-${{ steps.version.outputs.version }}
+          path: target/combat-${{ steps.version.outputs.version }}.jar
+          if-no-files-found: error
